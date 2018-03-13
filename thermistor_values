@@ -23,3 +23,7 @@ B 3.124809880e-4
 C -2.784875147e-7
 
 T = 1 / (A + B*ln(R) + C*(ln(R))^3)
+
+Voltage divider considerations:
+
+Take R1 = (Rntc_max - Rntc_min)/2
