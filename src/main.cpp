@@ -36,7 +36,7 @@ ntc_info amb_thermistor = {
 
 int duty = 0;
 float tot_voltage, charge_voltage, batt_voltage, current, set_voltage;
-float charge_current;
+float charge_current, batt_temp, amb_temp;
 float output;
 
 unsigned long last_volt_measurement, loop_top;
@@ -44,18 +44,24 @@ unsigned long last_volt_measurement, loop_top;
 float kp = 2.0, ki = 0.000005, kd = 4;
 PidRegulator spid = PidRegulator(kp, ki, kd);
 
-float temp_from_r(float resistance, float a, float b, float c) {
-  return 1 / (a + b*log(resistance) + c*pow(log(resistance),3));
+float temp_from_r(float resistance, float a, float b, float c) {;
+  return (1 / (a + b*log(resistance) + c*pow(log(resistance),3)));
 }
 
 float ntc_resistance(float vout, float r1) {
   return (vout*r1)/(5.0 - vout);
 }
 
+float kelvin_to_c(float kelvin) {
+  return kelvin - 273.15;
+}
+
 float read_ntc_temp(ntc_info thermistor) {
   float v_meas = (analogRead(thermistor.pin)*5.0)/1023.0;
   float r_ntc = ntc_resistance(v_meas, thermistor.r1);
-  return temp_from_r(r_ntc, thermistor.A, thermistor.B, thermistor.C);
+  return kelvin_to_c(
+    temp_from_r(r_ntc, thermistor.A, thermistor.B, thermistor.C)
+  );
 }
 
 void setup() {
@@ -70,13 +76,19 @@ void setup() {
     batt_voltage = 5.0 - (batt_voltage*5.0)/(1023.0);
     Serial.begin(9600);
     set_voltage = 1.5;
-    charge_current=200;
+    charge_current=1000;
     last_volt_measurement = millis();
 }
 
 void loop() {
 
     loop_top = millis();
+    batt_temp = read_ntc_temp(batt_thermistor);
+    amb_temp = read_ntc_temp(amb_thermistor);
+
+    if (batt_temp > 45) {
+      charge_current = 0.0;
+    }
 
     //Measure battery voltage
     if (loop_top - last_volt_measurement > 20000) {
@@ -138,9 +150,9 @@ void loop() {
     //Serial.print(batt_voltage);
     //Serial.print(",");
     //Serial.print(charge_voltage);
-    Serial.print(read_ntc_temp(batt_thermistor));
+    Serial.print(batt_temp);
     Serial.print(",");
-    Serial.print(read_ntc_temp(amb_thermistor));
+    Serial.print(amb_temp);
     Serial.println();
 
 
