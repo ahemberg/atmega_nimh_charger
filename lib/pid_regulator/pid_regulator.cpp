@@ -1,4 +1,4 @@
-#include "pid_regulator.h"
+#include "pid_regulator.hpp"
 
 float PidRegulator::simplePid(float setpoint, float input) {
     unsigned long now = millis();

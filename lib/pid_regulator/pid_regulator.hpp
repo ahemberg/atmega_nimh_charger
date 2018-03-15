@@ -1,3 +1,6 @@
+#ifndef PID_REGULATOR_H
+#define PID_REGULATOR_H
+
 #include <Arduino.h>
 
 class PidRegulator {
@@ -9,3 +12,5 @@ class PidRegulator {
 
     float simplePid(float setpoint, float input);
 };
+
+#endif

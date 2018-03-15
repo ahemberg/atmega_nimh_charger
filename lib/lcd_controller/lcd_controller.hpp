@@ -1,0 +1,4 @@
+#ifndef LCD_CONTROLLER_H
+#define LCD_CONTROLLER_H
+
+#endif LCD_CONTROLLER_H

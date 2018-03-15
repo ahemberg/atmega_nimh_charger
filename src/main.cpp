@@ -1,7 +1,7 @@
 #include <Arduino.h>
 #include <math.h>
 #include <LiquidCrystal.h>
-#include <pid_regulator.h>
+#include <pid_regulator.hpp>
 
 #define R_SENSE 2.595
 #define AVGS 10
