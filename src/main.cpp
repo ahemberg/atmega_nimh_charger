@@ -1,10 +1,12 @@
 #include <Arduino.h>
 #include <math.h>
+#include <LiquidCrystal.h>
 #include <pid_regulator.h>
 
 #define R_SENSE 2.595
 #define AVGS 10
 #define CHARGE_PIN 9
+#define BAUDRATE 9600
 
 struct ntc_info
 {
@@ -14,8 +16,6 @@ struct ntc_info
    float C;
    float r1;
 };
-
-//typedef struct ntc_info NtcInfo;
 
 ntc_info batt_thermistor = {
   A2,
@@ -33,19 +33,22 @@ ntc_info amb_thermistor = {
   10e3
 };
 
+const int rs = 12, en = 11, d4 = 5, d5 = 4, d6 = 3, d7 = 2;
+LiquidCrystal lcd(rs, en, d4, d5, d6, d7);
 
 int duty = 0;
 float tot_voltage, charge_voltage, batt_voltage, current, set_voltage;
 float charge_current, batt_temp, amb_temp;
 float output;
 
-unsigned long last_volt_measurement, loop_top;
+unsigned long last_volt_measurement, loop_top, last_lcd_update, ll;
+bool page_a;
 
-float kp = 2.0, ki = 0.000005, kd = 4;
+float kp = 2.0, ki = 0*0.000005, kd = 4;
 PidRegulator spid = PidRegulator(kp, ki, kd);
 
 float temp_from_r(float resistance, float a, float b, float c) {;
-  return (1 / (a + b*log(resistance) + c*pow(log(resistance),3)));
+  return 1 / (a + b*log(resistance) + c*pow(log(resistance),3));
 }
 
 float ntc_resistance(float vout, float r1) {
@@ -71,13 +74,20 @@ void setup() {
     pinMode(A3, INPUT);
 
     pinMode(CHARGE_PIN, OUTPUT);
+
+    Serial.begin(BAUDRATE);
+
+    lcd.begin(16, 2);
+
     analogWrite(9, duty);
     batt_voltage = analogRead(A1);
     batt_voltage = 5.0 - (batt_voltage*5.0)/(1023.0);
-    Serial.begin(9600);
+
     set_voltage = 1.5;
-    charge_current=1000;
+    charge_current=500;
     last_volt_measurement = millis();
+    last_lcd_update = millis();
+
 }
 
 void loop() {
@@ -90,12 +100,12 @@ void loop() {
       charge_current = 0.0;
     }
 
-    //Measure battery voltage
-    if (loop_top - last_volt_measurement > 20000) {
+    //Measure battery voltage once per minute
+    if (loop_top - last_volt_measurement > 60500) {
         //Turn off and measure battery voltage
         analogWrite(CHARGE_PIN, 0);
         //Let cap die down
-        delay(500);
+        delay(1000);
         batt_voltage = analogRead(A1);
         analogWrite(CHARGE_PIN, duty);
         last_volt_measurement = millis();
@@ -139,10 +149,10 @@ void loop() {
     Serial.println();
     */
     //Plotter
-    //Serial.print(current);
-    //Serial.print(",");
-    //Serial.print(charge_current);
-    //Serial.print(",");
+    Serial.print(current);
+    Serial.print(",");
+    Serial.print(charge_current);
+    Serial.print(",");
     //Serial.print(duty);
     //Serial.print(",");
     //Serial.print(output);
@@ -150,10 +160,41 @@ void loop() {
     //Serial.print(batt_voltage);
     //Serial.print(",");
     //Serial.print(charge_voltage);
-    Serial.print(batt_temp);
-    Serial.print(",");
-    Serial.print(amb_temp);
+    //Serial.print(",");
+    //Serial.print(batt_temp);
+    //Serial.print(",");
+    //Serial.print(amb_temp);
     Serial.println();
 
+    //Update display
+    if (loop_top - last_lcd_update > 10000) {
+      lcd.noDisplay();
+      lcd.clear();
+      if (page_a) {
+        lcd.setCursor(0,0);
+        lcd.print("Ch:");
+        lcd.print(current);
+        lcd.print("mA");
+        lcd.setCursor(0,1);
+        lcd.print("Cv:");
+        lcd.print(charge_voltage);
+        lcd.setCursor(9,1);
+        lcd.print("Bv:");
+        lcd.print(batt_voltage);
+      } else {
+        lcd.setCursor(0,0);
+        lcd.print("Batt t:");
+        lcd.print(batt_temp);
+        lcd.print("C");
+        lcd.setCursor(0,1);
+        lcd.print("Amb t:");
+        lcd.print(amb_temp);
+        lcd.print("C");
+      }
 
+      page_a = !page_a;
+
+      lcd.display();
+      last_lcd_update = loop_top;
+    }
 }
