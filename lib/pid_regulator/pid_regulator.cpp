@@ -2,14 +2,14 @@
 
 float PidRegulator::simplePid(float setpoint, float input) {
     unsigned long now = millis();
-    float time_change = (float)(now - this->last_time);
+    float time_change = (float)(now - last_time);
     float error = setpoint - input;
-    this->err_sum += (error * time_change);
+    err_sum += (error * time_change);
 
-    float d_input = input - this->last_input;
+    float d_input = input - last_input;
 
-    this->last_input = input;
-    this->last_time = now;
+    last_input = input;
+    last_time = now;
 
-    return this->kp * error + this->ki * err_sum - this->kd * d_input;
+    return kp * error + ki * err_sum - kd * d_input;
 }
