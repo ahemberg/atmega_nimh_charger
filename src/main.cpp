@@ -2,6 +2,7 @@
 #include <math.h>
 #include <LiquidCrystal.h>
 #include <pid_regulator.hpp>
+#include <lcd_controller.hpp>
 
 #define R_SENSE 2.595
 #define AVGS 10
@@ -35,6 +36,7 @@ ntc_info amb_thermistor = {
 
 const int rs = 12, en = 11, d4 = 5, d5 = 4, d6 = 3, d7 = 2;
 LiquidCrystal lcd(rs, en, d4, d5, d6, d7);
+LcdController lcc(&lcd);
 
 int duty = 0;
 float tot_voltage, charge_voltage, batt_voltage, current, set_voltage;
@@ -84,10 +86,9 @@ void setup() {
     batt_voltage = 5.0 - (batt_voltage*5.0)/(1023.0);
 
     set_voltage = 1.5;
-    charge_current=500;
+    charge_current=250;
     last_volt_measurement = millis();
     last_lcd_update = millis();
-
 }
 
 void loop() {
@@ -171,6 +172,8 @@ void loop() {
       lcd.noDisplay();
       lcd.clear();
       if (page_a) {
+        lcc.page_a(current, charge_voltage, batt_voltage);
+        /*
         lcd.setCursor(0,0);
         lcd.print("Ch:");
         lcd.print(current);
@@ -181,7 +184,10 @@ void loop() {
         lcd.setCursor(9,1);
         lcd.print("Bv:");
         lcd.print(batt_voltage);
+        */
       } else {
+        lcc.page_b(batt_temp, amb_temp);
+        /*
         lcd.setCursor(0,0);
         lcd.print("Batt t:");
         lcd.print(batt_temp);
@@ -190,6 +196,7 @@ void loop() {
         lcd.print("Amb t:");
         lcd.print(amb_temp);
         lcd.print("C");
+        */
       }
 
       page_a = !page_a;
