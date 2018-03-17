@@ -3,12 +3,29 @@
 #include <LiquidCrystal.h>
 #include <pid_regulator.hpp>
 #include <lcd_controller.hpp>
+#include <Thermistor_controller.hpp>
 
 #define R_SENSE 2.595
 #define AVGS 10
 #define CHARGE_PIN 9
 #define BAUDRATE 9600
 
+ThermistorController batt_thermistorX(
+  A2,
+  0.5522033026e-3,
+  3.378163036e-4,
+  -3.876640607e-7,
+  10e3
+);
+
+ThermistorController amb_thermistorX(
+  A3,
+  0.6944098729e-3,
+  3.124809880e-4,
+  -2.784875147e-7,
+  10e3
+);
+/*
 struct ntc_info
 {
    int pin;
@@ -17,7 +34,7 @@ struct ntc_info
    float C;
    float r1;
 };
-
+*/
 ntc_info batt_thermistor = {
   A2,
   0.5522033026e-3,
