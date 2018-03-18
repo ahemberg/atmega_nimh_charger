@@ -11,10 +11,6 @@
 #define AMB_THERMISTOR_PIN A3
 #define CHARGE_PIN 9
 
-#define SHUNT_R 2.595
-#define AVGS 10
-#define BAUDRATE 9600
-
 #define LCD_RS 12
 #define LCD_EN 11
 #define LCD_D4 5
@@ -23,6 +19,14 @@
 #define LCD_D7 2
 #define LCD_COLUMNS 16
 #define LCD_ROWS 2
+
+#define SHUNT_R 2.595
+#define AVGS 10
+#define BAUDRATE 9600
+
+#define KP 2.0
+#define KI 0.0 //0.000005
+#define KD 4.0
 
 ThermistorController batt_thermistor(
   BATT_THERMISTOR_PIN,
@@ -47,11 +51,11 @@ int duty = 0;
 float tot_voltage, charge_voltage, batt_voltage, current, set_voltage;
 float charge_current, batt_temp, amb_temp;
 float output;
+float d_bv[100], d_te[100];
 
 unsigned long last_volt_measurement, loop_top, last_lcd_update, ll;
 
-float kp = 2.0, ki = 0*0.000005, kd = 4;
-PidRegulator spid = PidRegulator(kp, ki, kd);
+PidRegulator spid = PidRegulator(KP, KI, KD);
 
 float read_voltage(int pin) {
   int ad_val = analogRead(pin);
@@ -60,6 +64,10 @@ float read_voltage(int pin) {
 
 float read_voltage_drop(int pin) {
   return 5.0 - read_voltage(pin);
+}
+
+float calc_current(float voltage_drop, float r_shunt) {
+  return 1000.0*(voltage_drop/r_shunt);
 }
 
 void setup() {
@@ -73,8 +81,8 @@ void setup() {
     Serial.begin(BAUDRATE);
 
     analogWrite(9, duty);
-    batt_voltage = analogRead(BATT_VOLTAGE_PIN);
-    batt_voltage = 5.0 - (batt_voltage*5.0)/(1023.0);
+
+    batt_voltage = read_voltage_drop(BATT_VOLTAGE_PIN);
 
     set_voltage = 1.5;
     charge_current=200;
@@ -98,29 +106,22 @@ void loop() {
         analogWrite(CHARGE_PIN, 0);
         //Let cap die down
         delay(1000);
-        batt_voltage = analogRead(A1);
+        batt_voltage = read_voltage_drop(BATT_VOLTAGE_PIN);
         analogWrite(CHARGE_PIN, duty);
         last_volt_measurement = millis();
-        batt_voltage = 5.0 - (batt_voltage*5.0)/(1023.0);
     }
 
     for (int i = 0; i < AVGS; i++) {
-        charge_voltage += analogRead(BATT_VOLTAGE_PIN);
-        tot_voltage += analogRead(SHUNT_VOLTAGE_PIN);
+        charge_voltage += read_voltage_drop(BATT_VOLTAGE_PIN);
+        tot_voltage += read_voltage_drop(SHUNT_VOLTAGE_PIN);
     }
 
-    charge_voltage = 5.0 - (charge_voltage*5.0)/(1023.0*AVGS);
-    tot_voltage = 5.0 - (tot_voltage*5.0)/(1023.0*AVGS);
-    current = round(((tot_voltage-charge_voltage)/SHUNT_R)*1000);
+    charge_voltage /= AVGS;
+    tot_voltage /= AVGS;
+
+    current = calc_current(tot_voltage-charge_voltage, SHUNT_R);
 
     output = spid.simplePid(charge_current, current);
-
-    if (output > 0) {
-        output = ceil(output);
-    } else {
-        output = floor(output);
-    }
-
     duty += output;
 
     if (duty > 255) duty = 255;
@@ -138,7 +139,6 @@ void loop() {
     //Update display
     if (loop_top - last_lcd_update > 10000) {
       lcd.noDisplay();
-      lcd.clear();
       if (lcc.p) {
         lcc.page_a(current, charge_voltage, batt_voltage);
       } else {
