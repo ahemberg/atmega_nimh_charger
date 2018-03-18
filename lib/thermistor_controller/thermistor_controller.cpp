@@ -1,7 +1,9 @@
 #include "thermistor_controller.hpp"
 
 float ThermistorController::temp_from_r(float r_ntc) {;
-  return 1 / (ntc_param.A + ntc_param.B*log(r_ntc) + ntc_param.C*pow(log(r_ntc),3));
+  return 1 / (
+    ntc_param.A + ntc_param.B*log(r_ntc) + ntc_param.C*pow(log(r_ntc),3)
+  );
 }
 
 float ThermistorController::ntc_resistance(float vout) {
