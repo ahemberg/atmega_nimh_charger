@@ -10,7 +10,14 @@
 #define CHARGE_PIN 9
 #define BAUDRATE 9600
 
-ThermistorController batt_thermistorX(
+#define LCD_RS 12
+#define LCD_EN 11
+#define LCD_D4 5
+#define LCD_D5 4
+#define LCD_D6 3
+#define LCD_D7 2
+
+ThermistorController batt_thermistor(
   A2,
   0.5522033026e-3,
   3.378163036e-4,
@@ -18,41 +25,15 @@ ThermistorController batt_thermistorX(
   10e3
 );
 
-ThermistorController amb_thermistorX(
+ThermistorController amb_thermistor(
   A3,
   0.6944098729e-3,
   3.124809880e-4,
   -2.784875147e-7,
   10e3
 );
-/*
-struct ntc_info
-{
-   int pin;
-   float A;
-   float B;
-   float C;
-   float r1;
-};
-*/
-ntc_info batt_thermistor = {
-  A2,
-  0.5522033026e-3,
-  3.378163036e-4,
-  -3.876640607e-7,
-  10e3
-};
 
-ntc_info amb_thermistor = {
-  A3,
-  0.6944098729e-3,
-  3.124809880e-4,
-  -2.784875147e-7,
-  10e3
-};
-
-const int rs = 12, en = 11, d4 = 5, d5 = 4, d6 = 3, d7 = 2;
-LiquidCrystal lcd(rs, en, d4, d5, d6, d7);
+LiquidCrystal lcd(LCD_RS, LCD_EN, LCD_D4, LCD_D5, LCD_D6, LCD_D7);
 LcdController lcc(&lcd);
 
 int duty = 0;
@@ -65,26 +46,6 @@ bool page_a;
 
 float kp = 2.0, ki = 0*0.000005, kd = 4;
 PidRegulator spid = PidRegulator(kp, ki, kd);
-
-float temp_from_r(float resistance, float a, float b, float c) {;
-  return 1 / (a + b*log(resistance) + c*pow(log(resistance),3));
-}
-
-float ntc_resistance(float vout, float r1) {
-  return (vout*r1)/(5.0 - vout);
-}
-
-float kelvin_to_c(float kelvin) {
-  return kelvin - 273.15;
-}
-
-float read_ntc_temp(ntc_info thermistor) {
-  float v_meas = (analogRead(thermistor.pin)*5.0)/1023.0;
-  float r_ntc = ntc_resistance(v_meas, thermistor.r1);
-  return kelvin_to_c(
-    temp_from_r(r_ntc, thermistor.A, thermistor.B, thermistor.C)
-  );
-}
 
 void setup() {
     pinMode(A0, INPUT);
@@ -103,7 +64,7 @@ void setup() {
     batt_voltage = 5.0 - (batt_voltage*5.0)/(1023.0);
 
     set_voltage = 1.5;
-    charge_current=250;
+    charge_current=200;
     last_volt_measurement = millis();
     last_lcd_update = millis();
 }
@@ -111,8 +72,8 @@ void setup() {
 void loop() {
 
     loop_top = millis();
-    batt_temp = read_ntc_temp(batt_thermistor);
-    amb_temp = read_ntc_temp(amb_thermistor);
+    batt_temp = batt_thermistor.read_ntc_temp();
+    amb_temp = amb_thermistor.read_ntc_temp();
 
     if (batt_temp > 45) {
       charge_current = 0.0;
