@@ -5,9 +5,14 @@
 #include <lcd_controller.hpp>
 #include <Thermistor_controller.hpp>
 
-#define R_SENSE 2.595
-#define AVGS 10
+#define SHUNT_VOLTAGE_PIN A0
+#define BATT_VOLTAGE_PIN A1
+#define BATT_THERMISTOR_PIN A2
+#define AMB_THERMISTOR_PIN A3
 #define CHARGE_PIN 9
+
+#define SHUNT_R 2.595
+#define AVGS 10
 #define BAUDRATE 9600
 
 #define LCD_RS 12
@@ -16,9 +21,11 @@
 #define LCD_D5 4
 #define LCD_D6 3
 #define LCD_D7 2
+#define LCD_COLUMNS 16
+#define LCD_ROWS 2
 
 ThermistorController batt_thermistor(
-  A2,
+  BATT_THERMISTOR_PIN,
   0.5522033026e-3,
   3.378163036e-4,
   -3.876640607e-7,
@@ -26,7 +33,7 @@ ThermistorController batt_thermistor(
 );
 
 ThermistorController amb_thermistor(
-  A3,
+  AMB_THERMISTOR_PIN,
   0.6944098729e-3,
   3.124809880e-4,
   -2.784875147e-7,
@@ -34,7 +41,7 @@ ThermistorController amb_thermistor(
 );
 
 LiquidCrystal lcd(LCD_RS, LCD_EN, LCD_D4, LCD_D5, LCD_D6, LCD_D7);
-LcdController lcc(&lcd);
+LcdController lcc(&lcd, LCD_COLUMNS, LCD_ROWS);
 
 int duty = 0;
 float tot_voltage, charge_voltage, batt_voltage, current, set_voltage;
@@ -42,25 +49,31 @@ float charge_current, batt_temp, amb_temp;
 float output;
 
 unsigned long last_volt_measurement, loop_top, last_lcd_update, ll;
-bool page_a;
 
 float kp = 2.0, ki = 0*0.000005, kd = 4;
 PidRegulator spid = PidRegulator(kp, ki, kd);
 
+float read_voltage(int pin) {
+  int ad_val = analogRead(pin);
+  return ad_val * (5.0/1023.0);
+}
+
+float read_voltage_drop(int pin) {
+  return 5.0 - read_voltage(pin);
+}
+
 void setup() {
-    pinMode(A0, INPUT);
-    pinMode(A1, INPUT);
-    pinMode(A2, INPUT);
-    pinMode(A3, INPUT);
+    pinMode(BATT_VOLTAGE_PIN, INPUT);
+    pinMode(SHUNT_VOLTAGE_PIN, INPUT);
+    pinMode(BATT_THERMISTOR_PIN, INPUT);
+    pinMode(AMB_THERMISTOR_PIN, INPUT);
 
     pinMode(CHARGE_PIN, OUTPUT);
 
     Serial.begin(BAUDRATE);
 
-    lcd.begin(16, 2);
-
     analogWrite(9, duty);
-    batt_voltage = analogRead(A1);
+    batt_voltage = analogRead(BATT_VOLTAGE_PIN);
     batt_voltage = 5.0 - (batt_voltage*5.0)/(1023.0);
 
     set_voltage = 1.5;
@@ -92,13 +105,13 @@ void loop() {
     }
 
     for (int i = 0; i < AVGS; i++) {
-        charge_voltage += analogRead(A1);
-        tot_voltage += analogRead(A0);
+        charge_voltage += analogRead(BATT_VOLTAGE_PIN);
+        tot_voltage += analogRead(SHUNT_VOLTAGE_PIN);
     }
 
     charge_voltage = 5.0 - (charge_voltage*5.0)/(1023.0*AVGS);
     tot_voltage = 5.0 - (tot_voltage*5.0)/(1023.0*AVGS);
-    current = round(((tot_voltage-charge_voltage)/R_SENSE)*1000);
+    current = round(((tot_voltage-charge_voltage)/SHUNT_R)*1000);
 
     output = spid.simplePid(charge_current, current);
 
@@ -112,72 +125,27 @@ void loop() {
 
     if (duty > 255) duty = 255;
     if (duty < 0) duty = 0;
+
     analogWrite(CHARGE_PIN, duty);
-    // Terminal view
-    /*
-    Serial.print("Batt V: ");
-    Serial.print(batt_voltage);
-    Serial.print(". A1 V: ");
-    Serial.print(tot_voltage);
-    Serial.print(". Curr mA: ");
-    Serial.print(current);
-    Serial.print(". avg mA: ");
-    Serial.print(curr_avg);
-    Serial.print(". Duty: ");
-    Serial.print(duty);
-    Serial.println();
-    */
+
     //Plotter
     Serial.print(current);
     Serial.print(",");
     Serial.print(charge_current);
     Serial.print(",");
-    //Serial.print(duty);
-    //Serial.print(",");
-    //Serial.print(output);
-    //Serial.print(",");
-    //Serial.print(batt_voltage);
-    //Serial.print(",");
-    //Serial.print(charge_voltage);
-    //Serial.print(",");
-    //Serial.print(batt_temp);
-    //Serial.print(",");
-    //Serial.print(amb_temp);
     Serial.println();
 
     //Update display
     if (loop_top - last_lcd_update > 10000) {
       lcd.noDisplay();
       lcd.clear();
-      if (page_a) {
+      if (lcc.p) {
         lcc.page_a(current, charge_voltage, batt_voltage);
-        /*
-        lcd.setCursor(0,0);
-        lcd.print("Ch:");
-        lcd.print(current);
-        lcd.print("mA");
-        lcd.setCursor(0,1);
-        lcd.print("Cv:");
-        lcd.print(charge_voltage);
-        lcd.setCursor(9,1);
-        lcd.print("Bv:");
-        lcd.print(batt_voltage);
-        */
       } else {
         lcc.page_b(batt_temp, amb_temp);
-        /*
-        lcd.setCursor(0,0);
-        lcd.print("Batt t:");
-        lcd.print(batt_temp);
-        lcd.print("C");
-        lcd.setCursor(0,1);
-        lcd.print("Amb t:");
-        lcd.print(amb_temp);
-        lcd.print("C");
-        */
       }
 
-      page_a = !page_a;
+      lcc.p = !lcc.p;
 
       lcd.display();
       last_lcd_update = loop_top;
