@@ -11,5 +11,12 @@ float PidRegulator::simplePid(float setpoint, float input) {
     last_input = input;
     last_time = now;
 
-    return kp * error + ki * err_sum - kd * d_input;
+    float output = kp * error + ki * err_sum - kd * d_input;
+
+    if (output > 0) {
+        output = ceil(output);
+    } else {
+        output = floor(output);
+    }
+    return output;
 }
