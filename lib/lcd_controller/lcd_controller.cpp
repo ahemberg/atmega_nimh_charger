@@ -26,3 +26,24 @@ void LcdController::page_b(float b_t, float a_t) {
   lcd->print(a_t);
   lcd->print("C");
 }
+
+void LcdController::page_c(int year, int month, int day, int hour, int minute) {
+  lcd->clear();
+  lcd->setCursor(0,0);
+  lcd->print(year);
+  lcd->print("-");
+  lcd->print(month);
+  lcd->print("-");
+  lcd->print(day);
+  lcd->print(" ");
+  lcd->print(hour);
+  lcd->print(" ");
+  lcd->print(minute);
+}
+
+void LcdController::increment_page() {
+  page++;
+  if (page > 2) {
+    page = 0;
+  }
+}

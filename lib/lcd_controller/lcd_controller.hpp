@@ -14,6 +14,7 @@ struct lcd_pins {
 class LcdController {
 public:
   bool p = true;
+  char page = 0;
   LiquidCrystal* lcd;
 
   LcdController(LiquidCrystal* _lcd) :
@@ -23,6 +24,9 @@ public:
 
   void page_a(float curr, float ch_v, float b_v);
   void page_b(float b_t, float a_t);
+  void page_c(int year, int month, int day, int hour, int minute);
+  void increment_page();
+
 };
 
 #endif

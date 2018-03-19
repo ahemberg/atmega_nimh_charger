@@ -1,9 +1,11 @@
 #include <Arduino.h>
 #include <math.h>
+#include <Wire.h>
 #include <LiquidCrystal.h>
 #include <pid_regulator.hpp>
 #include <lcd_controller.hpp>
 #include <Thermistor_controller.hpp>
+#include <RTClib.h>
 
 #define SHUNT_VOLTAGE_PIN A0
 #define BATT_VOLTAGE_PIN A1
@@ -27,6 +29,8 @@
 #define KP 2.0
 #define KI 0.0 //0.000005
 #define KD 4.0
+
+RTC_DS3231 rtc;
 
 ThermistorController batt_thermistor(
   BATT_THERMISTOR_PIN,
@@ -79,6 +83,7 @@ void setup() {
     pinMode(CHARGE_PIN, OUTPUT);
 
     Serial.begin(BAUDRATE);
+    rtc.begin();
 
     analogWrite(9, duty);
 
@@ -91,7 +96,7 @@ void setup() {
 }
 
 void loop() {
-
+    DateTime now = rtc.now();
     loop_top = millis();
     batt_temp = batt_thermistor.read_ntc_temp();
     amb_temp = amb_thermistor.read_ntc_temp();
@@ -139,13 +144,18 @@ void loop() {
     //Update display
     if (loop_top - last_lcd_update > 10000) {
       lcd.noDisplay();
-      if (lcc.p) {
+      switch (lcc.page) {
+        case 0:
         lcc.page_a(current, charge_voltage, batt_voltage);
-      } else {
+        break;
+        case 1:
         lcc.page_b(batt_temp, amb_temp);
+        break;
+        case 2:
+        lcc.page_c(now.year(), now.month(), now.day(), now.hour(), now.minute());
+        break;
       }
-
-      lcc.p = !lcc.p;
+      lcc.increment_page();
 
       lcd.display();
       last_lcd_update = loop_top;
