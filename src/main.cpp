@@ -7,14 +7,6 @@
 #include <Thermistor_controller.hpp>
 #include <RTClib.h>
 
-struct button {
-  int pin;
-  bool state;
-  bool last_state;
-  bool pushed;
-  unsigned long last_debounce;
-};
-
 #define SHUNT_VOLTAGE_PIN A0
 #define BATT_VOLTAGE_PIN A1
 #define BATT_THERMISTOR_PIN A2
@@ -26,10 +18,11 @@ struct button {
 #define LCD_D4 5
 #define LCD_D5 4
 #define LCD_D6 3
-#define LCD_D7 2
+#define LCD_D7 13
 #define LCD_COLUMNS 16
 #define LCD_ROWS 2
 
+#define INTERRUPT_PIN 2
 #define BTN_1 6
 #define BTN_2 7
 #define BTN_3 8
@@ -43,6 +36,22 @@ struct button {
 #define KI 0.0 //0.000005
 #define KD 4.0
 
+struct button {
+  int pin;
+  bool state;
+  bool last_state;
+  bool pushed;
+  unsigned long last_debounce;
+};
+
+struct charge_values {
+    int charger_duty = 0;
+    float charge_voltage, batt_voltage, set_voltage;
+    float current = 0, charge_current = 0;
+    float batt_temp = 0, amb_temp = 0;
+    unsigned long last_batt_measurement = 0, measurement_start = 0;
+    bool batt_measuring = false;
+};
 
 RTC_DS3231 rtc;
 
@@ -70,17 +79,13 @@ button button_2 = {BTN_2, false, false, false, 0};
 button button_3 = {BTN_3, false, false, false, 0};
 button button_4 = {BTN_4, false, false, false, 0};
 
-int duty = 0;
-float tot_voltage, charge_voltage, batt_voltage, current, set_voltage;
-float charge_current, batt_temp, amb_temp;
+charge_values charge_param;
+PidRegulator spid = PidRegulator(KP, KI, KD);
+
 float output;
 float d_bv[100], d_te[100];
 
-bool foo = false;
-
-unsigned long last_volt_measurement, loop_top, last_lcd_update, ll;
-
-PidRegulator spid = PidRegulator(KP, KI, KD);
+unsigned long loop_top, last_lcd_update, ll;
 
 float read_voltage(int pin) {
   int ad_val = analogRead(pin);
@@ -91,12 +96,21 @@ float read_voltage_drop(int pin) {
   return 5.0 - read_voltage(pin);
 }
 
-float read_battery_voltage(int cap_diedown_ms, int batt_voltage_pin, int charge_pin, int curr_duty) {
-  analogWrite(charge_pin, 0);
-  delay(cap_diedown_ms);
-  float bv = read_voltage_drop(batt_voltage_pin);
-  analogWrite(charge_pin, curr_duty);
-  return bv;
+void read_battery_voltage(charge_values *cv) {
+  if (cv->batt_measuring) {
+    if (millis() - cv->measurement_start < 1000) return;
+
+    cv->batt_voltage = read_voltage_drop(BATT_VOLTAGE_PIN); // TODO MORE GENERIC
+    analogWrite(CHARGE_PIN, cv->charger_duty);
+    cv->batt_measuring = false;
+    cv->last_batt_measurement = millis();
+  } else {
+    if (millis() - cv->last_batt_measurement > 60000) {
+      cv->batt_measuring = true;
+      cv->measurement_start = millis();
+      analogWrite(CHARGE_PIN, 0);
+    }
+  }
 }
 
 float calc_current(float voltage_drop, float r_shunt) {
@@ -124,7 +138,7 @@ void read_button(button* btn) {
   }
 
   if ((millis() - btn->last_debounce) > debounce_delay) {
-    if (btn->state == HIGH) {
+    if (btn->state == LOW) {
       btn->pushed = true;
     }
     btn->last_debounce = millis();
@@ -138,86 +152,74 @@ void setup() {
     pinMode(BATT_THERMISTOR_PIN, INPUT);
     pinMode(AMB_THERMISTOR_PIN, INPUT);
 
-    pinMode(BTN_1, INPUT);
-    pinMode(BTN_2, INPUT);
-    pinMode(BTN_3, INPUT);
-    pinMode(BTN_4, INPUT);
+    pinMode(BTN_1, INPUT_PULLUP);
+    pinMode(BTN_2, INPUT_PULLUP);
+    pinMode(BTN_3, INPUT_PULLUP);
+    pinMode(BTN_4, INPUT_PULLUP);
 
     pinMode(CHARGE_PIN, OUTPUT);
 
     Serial.begin(BAUDRATE);
     rtc.begin();
 
-    analogWrite(9, duty);
 
-    batt_voltage = read_voltage_drop(BATT_VOLTAGE_PIN);
 
-    set_voltage = 1.5;
-    charge_current=1000;
-    last_volt_measurement = millis();
+    analogWrite(CHARGE_PIN, charge_param.charger_duty);
+
+    charge_param.last_batt_measurement = 60000;
+    charge_param.set_voltage = 1.5;
+    charge_param.charge_current = 50;
     last_lcd_update = millis();
 }
 
 void loop() {
     DateTime now = rtc.now();
     loop_top = millis();
-    batt_temp = batt_thermistor.read_ntc_temp();
-    amb_temp = amb_thermistor.read_ntc_temp();
-
-    if (batt_temp > 45) {
-      charge_current = 0.0;
+    charge_param.batt_temp = batt_thermistor.read_ntc_temp();
+    charge_param.amb_temp = amb_thermistor.read_ntc_temp();
+    if (charge_param.batt_temp > 45) {
+      charge_param.charge_current = 0.0;
     }
 
     //Measure battery voltage once per minute
-    if (loop_top - last_volt_measurement > 60500) {
-        batt_voltage = read_battery_voltage(
-          1000, BATT_VOLTAGE_PIN, CHARGE_PIN, duty
-        );
-        last_volt_measurement = millis();
+    read_battery_voltage(&charge_param);
+
+    if (!charge_param.batt_measuring) {
+      charge_param.charge_voltage = read_voltage_drop(CHARGE_PIN);
+      charge_param.current = measure_charge_current(
+        AVGS, BATT_VOLTAGE_PIN, SHUNT_VOLTAGE_PIN, SHUNT_R
+      );
+
+      output = spid.simplePid(charge_param.charge_current, charge_param.current);
+      charge_param.charger_duty += output;
+
+      if (charge_param.charger_duty > 255) charge_param.charger_duty = 255;
+      if (charge_param.charger_duty < 0) charge_param.charger_duty = 0;
+
+      analogWrite(CHARGE_PIN, charge_param.charger_duty);
     }
 
-    current = measure_charge_current(
-      AVGS, BATT_VOLTAGE_PIN, SHUNT_VOLTAGE_PIN, SHUNT_R
-    );
-
-    output = spid.simplePid(charge_current, current);
-    duty += output;
-
-    if (duty > 255) duty = 255;
-    if (duty < 0) duty = 0;
-
-    analogWrite(CHARGE_PIN, duty);
-
     //Plotter
-    //Serial.print(current);
-    //Serial.print(",");
-    //Serial.print(charge_current);
-    //Serial.print(",");
-    //Serial.println();
+    Serial.print(charge_param.current);
+    Serial.print(",");
+    Serial.print(charge_param.charge_current);
+    Serial.print(",");
+    Serial.println();
 
     read_button(&button_1);
     read_button(&button_2);
     read_button(&button_3);
     read_button(&button_4);
 
-    Serial.print(button_1.pushed);
-    Serial.print(",");
-    Serial.print(button_2.pushed);
-    Serial.print(",");
-    Serial.print(button_3.pushed);
-    Serial.print(",");
-    Serial.print(button_4.pushed);
-    Serial.println();
-
     //Update display
     if (loop_top - last_lcd_update > 1000) {
       lcd.noDisplay();
       switch (lcc.page) {
         case 0:
-        lcc.page_a(current, charge_voltage, batt_voltage);
+        lcc.page_a(charge_param.current, charge_param.charge_voltage, charge_param.batt_voltage);
         break;
         case 1:
-        lcc.page_b(batt_temp, amb_temp);
+        lcc.page_b(charge_param.batt_temp, charge_param.amb_temp);
         break;
         case 2:
         lcc.page_c(now.year(), now.month(), now.day(), now.hour(), now.minute());
@@ -227,14 +229,18 @@ void loop() {
       last_lcd_update = loop_top;
     }
 
-    if (button_1.pushed) {
+    if (button_2.pushed) {
       lcc.increment_page();
+      button_2.pushed = false;
+    }
+
+    if (button_3.pushed) {
+      lcc.decrement_page();
+      button_3.pushed = false;
     }
 
     //Clear button pushes
     button_1.pushed = false;
-    button_2.pushed = false;
-    button_3.pushed = false;
     button_4.pushed = false;
 
 }
