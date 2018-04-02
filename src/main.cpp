@@ -100,7 +100,7 @@ void read_battery_voltage(charge_values *cv) {
   if (cv->batt_measuring) {
     if (millis() - cv->measurement_start < 1000) return;
 
-    cv->batt_voltage = read_voltage_drop(BATT_VOLTAGE_PIN); // TODO MORE GENERIC
+    cv->batt_voltage = read_voltage_drop(BATT_VOLTAGE_PIN);
     analogWrite(CHARGE_PIN, cv->charger_duty);
     cv->batt_measuring = false;
     cv->last_batt_measurement = millis();
@@ -161,9 +161,7 @@ void setup() {
 
     Serial.begin(BAUDRATE);
     rtc.begin();
-
-
-
+    
     analogWrite(CHARGE_PIN, charge_param.charger_duty);
 
     charge_param.last_batt_measurement = 60000;
