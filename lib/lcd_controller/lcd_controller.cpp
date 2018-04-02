@@ -47,3 +47,10 @@ void LcdController::increment_page() {
     page = 0;
   }
 }
+
+void LcdController::decrement_page() {
+  page--;
+  if (page < 0) {
+    page = 2;
+  }
+}

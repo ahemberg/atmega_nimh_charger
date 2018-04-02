@@ -26,6 +26,8 @@ public:
   void page_b(float b_t, float a_t);
   void page_c(int year, int month, int day, int hour, int minute);
   void increment_page();
+  void decrement_page();
+
 
 };
 
