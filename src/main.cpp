@@ -4,29 +4,11 @@
 #include <LiquidCrystal.h>
 #include <pid_regulator.hpp>
 #include <lcd_controller.hpp>
-#include <Thermistor_controller.hpp>
+#include <thermistor_controller.hpp>
+#include <charge_controller.h>
 #include <RTClib.h>
+#include <pin_definitions.h>
 
-#define SHUNT_VOLTAGE_PIN A0
-#define BATT_VOLTAGE_PIN A1
-#define BATT_THERMISTOR_PIN A2
-#define AMB_THERMISTOR_PIN A3
-#define CHARGE_PIN 9
-
-#define LCD_RS 12
-#define LCD_EN 11
-#define LCD_D4 5
-#define LCD_D5 4
-#define LCD_D6 3
-#define LCD_D7 13
-#define LCD_COLUMNS 16
-#define LCD_ROWS 2
-
-#define INTERRUPT_PIN 2
-#define BTN_1 6
-#define BTN_2 7
-#define BTN_3 8
-#define BTN_4 10
 
 #define SHUNT_R 2.595
 #define AVGS 10
@@ -51,6 +33,7 @@ struct charge_values {
     float batt_temp = 0, amb_temp = 0;
     unsigned long last_batt_measurement = 0, measurement_start = 0;
     bool batt_measuring = false;
+    float d_bv[100], d_te[100];
 };
 
 RTC_DS3231 rtc;
@@ -83,7 +66,6 @@ charge_values charge_param;
 PidRegulator spid = PidRegulator(KP, KI, KD);
 
 float output;
-float d_bv[100], d_te[100];
 
 unsigned long loop_top, last_lcd_update, ll;
 
@@ -116,7 +98,7 @@ void read_battery_voltage(charge_values *cv) {
 float calc_current(float voltage_drop, float r_shunt) {
   return 1000.0*(voltage_drop/r_shunt);
 }
-
+// TODO Implement this in charge controller
 float measure_charge_current(int num_avgs, int bv_pin, int sv_pin, float shunt_r) {
   float cv, sv;
   for (int i = 0; i < num_avgs; i++) {
@@ -161,7 +143,7 @@ void setup() {
 
     Serial.begin(BAUDRATE);
     rtc.begin();
-    
+
     analogWrite(CHARGE_PIN, charge_param.charger_duty);
 
     charge_param.last_batt_measurement = 60000;
@@ -175,11 +157,11 @@ void loop() {
     loop_top = millis();
     charge_param.batt_temp = batt_thermistor.read_ntc_temp();
     charge_param.amb_temp = amb_thermistor.read_ntc_temp();
+
     if (charge_param.batt_temp > 45) {
       charge_param.charge_current = 0.0;
     }
 
-    //Measure battery voltage once per minute
     read_battery_voltage(&charge_param);
 
     if (!charge_param.batt_measuring) {
@@ -235,6 +217,14 @@ void loop() {
     if (button_3.pushed) {
       lcc.decrement_page();
       button_3.pushed = false;
+    }
+
+    if (button_4.pushed) {
+      charge_param.charge_current += 10;
+    }
+
+    if (button_1.pushed) {
+      charge_param.charge_current -= 10;
     }
 
     //Clear button pushes
