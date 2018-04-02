@@ -153,7 +153,7 @@ void setup() {
     batt_voltage = read_voltage_drop(BATT_VOLTAGE_PIN);
 
     set_voltage = 1.5;
-    charge_current=200;
+    charge_current=1000;
     last_volt_measurement = millis();
     last_lcd_update = millis();
 }
@@ -209,14 +209,8 @@ void loop() {
     Serial.print(button_4.pushed);
     Serial.println();
 
-    button_1.pushed = false;
-    button_2.pushed = false;
-    button_3.pushed = false;
-    button_4.pushed = false;
-
-
     //Update display
-    if (loop_top - last_lcd_update > 10000) {
+    if (loop_top - last_lcd_update > 1000) {
       lcd.noDisplay();
       switch (lcc.page) {
         case 0:
@@ -229,9 +223,18 @@ void loop() {
         lcc.page_c(now.year(), now.month(), now.day(), now.hour(), now.minute());
         break;
       }
-      lcc.increment_page();
-
       lcd.display();
       last_lcd_update = loop_top;
     }
+
+    if (button_1.pushed) {
+      lcc.increment_page();
+    }
+
+    //Clear button pushes
+    button_1.pushed = false;
+    button_2.pushed = false;
+    button_3.pushed = false;
+    button_4.pushed = false;
+
 }
