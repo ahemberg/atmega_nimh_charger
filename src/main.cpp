@@ -1,14 +1,13 @@
 #include <Arduino.h>
 #include <math.h>
 #include <Wire.h>
-#include <LiquidCrystal.h>
-#include <pid_regulator.hpp>
-#include <lcd_controller.hpp>
-#include <thermistor_controller.hpp>
-#include <charge_controller.h>
 #include <RTClib.h>
 #include <pin_definitions.h>
-
+#include <LiquidCrystal.h>
+#include <lcd_controller.hpp>
+#include <pid_regulator.hpp>
+#include <thermistor_controller.hpp>
+#include <charge_controller.h>
 
 #define SHUNT_R 2.595
 #define AVGS 10
@@ -24,16 +23,6 @@ struct button {
   bool last_state;
   bool pushed;
   unsigned long last_debounce;
-};
-
-struct charge_values {
-    int charger_duty = 0;
-    float charge_voltage, batt_voltage, set_voltage;
-    float current = 0, charge_current = 0;
-    float batt_temp = 0, amb_temp = 0;
-    unsigned long last_batt_measurement = 0, measurement_start = 0;
-    bool batt_measuring = false;
-    float d_bv[100], d_te[100];
 };
 
 RTC_DS3231 rtc;
@@ -62,55 +51,19 @@ button button_2 = {BTN_2, false, false, false, 0};
 button button_3 = {BTN_3, false, false, false, 0};
 button button_4 = {BTN_4, false, false, false, 0};
 
-charge_values charge_param;
+//charge_values charge_param;
 PidRegulator spid = PidRegulator(KP, KI, KD);
 
-float output;
+ChargeController cc = ChargeController(
+  CHARGE_PIN,
+  BATT_VOLTAGE_PIN,
+  SHUNT_VOLTAGE_PIN,
+  &spid,
+  &amb_thermistor,
+  &batt_thermistor
+);
 
-unsigned long loop_top, last_lcd_update, ll;
-
-float read_voltage(int pin) {
-  int ad_val = analogRead(pin);
-  return ad_val * (5.0/1023.0);
-}
-
-float read_voltage_drop(int pin) {
-  return 5.0 - read_voltage(pin);
-}
-
-void read_battery_voltage(charge_values *cv) {
-  if (cv->batt_measuring) {
-    if (millis() - cv->measurement_start < 1000) return;
-
-    cv->batt_voltage = read_voltage_drop(BATT_VOLTAGE_PIN);
-    analogWrite(CHARGE_PIN, cv->charger_duty);
-    cv->batt_measuring = false;
-    cv->last_batt_measurement = millis();
-  } else {
-    if (millis() - cv->last_batt_measurement > 60000) {
-      cv->batt_measuring = true;
-      cv->measurement_start = millis();
-      analogWrite(CHARGE_PIN, 0);
-    }
-  }
-}
-
-float calc_current(float voltage_drop, float r_shunt) {
-  return 1000.0*(voltage_drop/r_shunt);
-}
-// TODO Implement this in charge controller
-float measure_charge_current(int num_avgs, int bv_pin, int sv_pin, float shunt_r) {
-  float cv, sv;
-  for (int i = 0; i < num_avgs; i++) {
-    cv += read_voltage_drop(bv_pin);
-    sv += read_voltage_drop(sv_pin);
-  }
-
-  cv /= AVGS;
-  sv /= AVGS;
-
-  return calc_current(sv-cv, shunt_r);
-}
+unsigned long loop_top, last_lcd_update;
 
 void read_button(button* btn) {
   unsigned long debounce_delay = 70;
@@ -144,45 +97,21 @@ void setup() {
     Serial.begin(BAUDRATE);
     rtc.begin();
 
-    analogWrite(CHARGE_PIN, charge_param.charger_duty);
+    cc.charge_current = 50;
 
-    charge_param.last_batt_measurement = 60000;
-    charge_param.set_voltage = 1.5;
-    charge_param.charge_current = 50;
     last_lcd_update = millis();
 }
 
 void loop() {
     DateTime now = rtc.now();
     loop_top = millis();
-    charge_param.batt_temp = batt_thermistor.read_ntc_temp();
-    charge_param.amb_temp = amb_thermistor.read_ntc_temp();
 
-    if (charge_param.batt_temp > 45) {
-      charge_param.charge_current = 0.0;
-    }
-
-    read_battery_voltage(&charge_param);
-
-    if (!charge_param.batt_measuring) {
-      charge_param.charge_voltage = read_voltage_drop(CHARGE_PIN);
-      charge_param.current = measure_charge_current(
-        AVGS, BATT_VOLTAGE_PIN, SHUNT_VOLTAGE_PIN, SHUNT_R
-      );
-
-      output = spid.simplePid(charge_param.charge_current, charge_param.current);
-      charge_param.charger_duty += output;
-
-      if (charge_param.charger_duty > 255) charge_param.charger_duty = 255;
-      if (charge_param.charger_duty < 0) charge_param.charger_duty = 0;
-
-      analogWrite(CHARGE_PIN, charge_param.charger_duty);
-    }
+    cc.control_loop();
 
     //Plotter
-    Serial.print(charge_param.current);
+    Serial.print(cc.current);
     Serial.print(",");
-    Serial.print(charge_param.charge_current);
+    Serial.print(cc.charge_current);
     Serial.print(",");
     Serial.println();
 
@@ -196,10 +125,10 @@ void loop() {
       lcd.noDisplay();
       switch (lcc.page) {
         case 0:
-        lcc.page_a(charge_param.current, charge_param.charge_voltage, charge_param.batt_voltage);
+        lcc.page_a(cc.current, cc.charge_voltage, cc.batt_voltage);
         break;
         case 1:
-        lcc.page_b(charge_param.batt_temp, charge_param.amb_temp);
+        lcc.page_b(cc.batt_temp, cc.amb_temp);
         break;
         case 2:
         lcc.page_c(now.year(), now.month(), now.day(), now.hour(), now.minute());
@@ -219,13 +148,8 @@ void loop() {
       button_3.pushed = false;
     }
 
-    if (button_4.pushed) {
-      charge_param.charge_current += 10;
-    }
-
-    if (button_1.pushed) {
-      charge_param.charge_current -= 10;
-    }
+    if (button_4.pushed) cc.charge_current += 10;
+    if (button_1.pushed) cc.charge_current -= 10;
 
     //Clear button pushes
     button_1.pushed = false;

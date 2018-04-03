@@ -1,5 +1,5 @@
 #ifndef TEMP_CONTROL_H
-#define TEMP_CONTTROL_H
+#define TEMP_CONTROL_H
 
 #include <Arduino.h>
 
