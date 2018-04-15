@@ -4,13 +4,6 @@
 #include <Arduino.h>
 #include <LiquidCrystal.h>
 
-struct lcd_pins {
-  int reset;
-  int enable;
-  int d_pins[4];
-};
-
-
 class LcdController {
 public:
   bool p = true;
@@ -27,8 +20,6 @@ public:
   void page_c(int year, int month, int day, int hour, int minute);
   void increment_page();
   void decrement_page();
-
-
 };
 
 #endif
