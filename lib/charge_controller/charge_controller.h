@@ -28,7 +28,8 @@ public:
     ThermistorController *amb_th,
     ThermistorController *bat_th
   ) :
-  charge_pin(_charge_pin), bv_pin(_bv_pin), cv_pin(_cv_pin), pid(_pid), amb_thermistor(amb_th), batt_thermistor(bat_th) {};
+  charge_pin(_charge_pin), bv_pin(_bv_pin), cv_pin(_cv_pin), pid(_pid),
+  amb_thermistor(amb_th), batt_thermistor(bat_th) {};
 
   void read_battery_voltage();
   void control_loop();

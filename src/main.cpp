@@ -51,7 +51,6 @@ button button_2 = {BTN_2, false, false, false, 0};
 button button_3 = {BTN_3, false, false, false, 0};
 button button_4 = {BTN_4, false, false, false, 0};
 
-//charge_values charge_param;
 PidRegulator spid = PidRegulator(KP, KI, KD);
 
 ChargeController cc = ChargeController(
@@ -64,6 +63,8 @@ ChargeController cc = ChargeController(
 );
 
 unsigned long loop_top, last_lcd_update;
+float mAh;
+DateTime now, then;
 
 void read_button(button* btn) {
   unsigned long debounce_delay = 70;
@@ -96,14 +97,16 @@ void setup() {
 
     Serial.begin(BAUDRATE);
     rtc.begin();
-
+    now = rtc.now();
     cc.charge_current = 50;
 
     last_lcd_update = millis();
 }
 
 void loop() {
-    DateTime now = rtc.now();
+    then = now;
+    now = rtc.now();
+
     loop_top = millis();
 
     cc.control_loop();
@@ -138,21 +141,15 @@ void loop() {
       last_lcd_update = loop_top;
     }
 
-    if (button_2.pushed) {
-      lcc.increment_page();
-      button_2.pushed = false;
-    }
-
-    if (button_3.pushed) {
-      lcc.decrement_page();
-      button_3.pushed = false;
-    }
-
+    if (button_2.pushed) lcc.increment_page();
+    if (button_3.pushed) lcc.decrement_page();
     if (button_4.pushed) cc.charge_current += 10;
     if (button_1.pushed) cc.charge_current -= 10;
 
     //Clear button pushes
     button_1.pushed = false;
+    button_2.pushed = false;
+    button_3.pushed = false;
     button_4.pushed = false;
 
 }
