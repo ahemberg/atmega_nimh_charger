@@ -16,8 +16,6 @@ void onI2CReceive(int howMany){
 	}
 }
 
-void sendBytes()
-
 void onI2CRequest() {
 	TinyWire.send(ad_val1 >> 8 & 0xFF);
 	TinyWire.send(ad_val1 & 0xFF);
