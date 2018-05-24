@@ -1,3 +1,6 @@
 [submodule "lib/RTCLib"]
 	path = lib/RTClib
 	url = https://github.com/adafruit/RTClib.git
+[submodule "atmega_nimh_charger_attiny_node"]
+	path = atmega_nimh_charger_attiny_node
+	url = https://github.com/ahemberg/atmega_nimh_charger_attiny_node
