@@ -46,6 +46,7 @@ Button button_4 = Button(BTN_4);
 
 PidRegulator spid = PidRegulator(KP, KI, KD);
 
+// TODO: Make temperature something called in CC.. At most send in the pins
 ChargeController cc = ChargeController(
   CHARGE_PIN,
   BATT_VOLTAGE_PIN,
