@@ -13,7 +13,7 @@ public:
   float current = 0, charge_current = 0;
   float batt_temp = 0, amb_temp = 0;
   unsigned long last_batt_measurement = 60000, measurement_start = 0;
-  bool batt_measuring = false;
+  bool batt_measuring = false, short_circuit = false, no_batt = false;
   float d_bv[100], d_te[100];
 
   PidRegulator *pid;

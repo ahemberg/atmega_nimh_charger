@@ -6,7 +6,17 @@ float ChargeController::read_voltage(int pin) {
 }
 
 float ChargeController::read_voltage_drop(int pin) {
-  return 5.0 - read_voltage(pin);
+  float drop = 5.0 - read_voltage(pin);
+  if (drop <= 0.05) {
+    short_circuit = true;
+  } else if (drop == 5.0) {
+    short_circuit = false;
+    no_batt = true;
+  } else {
+    short_circuit = false;
+    no_batt = false;
+  }
+  return drop;
 }
 
 float ChargeController::calc_current(float voltage_drop, float r_shunt) {
@@ -43,6 +53,9 @@ void ChargeController::read_battery_voltage() {
   }
 }
 
+/*
+ * Main Loop for charge controller.
+ */
 void ChargeController::control_loop() {
 
   batt_temp = batt_thermistor->read_ntc_temp();
@@ -60,6 +73,11 @@ void ChargeController::control_loop() {
 
   if (charger_duty > 255) charger_duty = 255;
   if (charger_duty < 0) charger_duty = 0;
+
+  //Disable if no battery or short_circuit
+  if (short_circuit || no_batt) {
+    charger_duty = 0;
+  }
 
   analogWrite(charge_pin, charger_duty);
 }

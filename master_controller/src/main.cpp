@@ -96,6 +96,9 @@ void loop() {
     Serial.print(",");
     Serial.println();
 
+    if (cc.short_circuit) Serial.println("SHORT!!!");
+    if (cc.no_batt) Serial.println("NO BATT!!!");
+
     button_1.read_button();
     button_2.read_button();
     button_3.read_button();
